@@ -10,11 +10,17 @@ import (
 type subState int
 
 const (
-	playCurrentState subState = iota
-	startChangeState
-	findTransitionFrame
-	transitionToNextState
+	// Loop playback of current state frames
+	ssPlayCurrentState subState = iota
+	// Initialized state change
+	ssInitChangeState
+	// Play frames of the current state and look for a transition frame
+	ssFindTransitionFrame
+	// Play a series of transition frames to move to the next state
+	ssTransitionToNextState
 )
+
+const defaultFrameRate = 25
 
 // CharacterDrawer implements character animation
 type CharacterDrawer struct {
@@ -27,7 +33,7 @@ type CharacterDrawer struct {
 	mutex             sync.Mutex
 	isRunning         bool
 	stateName         string
-	nextStateName     string
+	nextStateName     *string
 	stateChangedCond  *sync.Cond
 	stateChangedError error
 
@@ -46,8 +52,8 @@ func NewCharacterDrawer(paintEngine PaintEngine, allStates []State, allFrameSeri
 		paintEngine:    paintEngine,
 		allStates:      allStates,
 		allFrameSeries: allFrameSeries,
-		frameRate:      25,
-		subState:       playCurrentState,
+		frameRate:      defaultFrameRate,
+		subState:       ssPlayCurrentState,
 	}
 	drawer.stateChangedCond = sync.NewCond(&drawer.mutex)
 	return drawer, nil
@@ -67,6 +73,7 @@ func (drawer *CharacterDrawer) Start(initStateName string) error {
 		return err
 	}
 
+	drawer.isRunning = true
 	go drawer.doDraw()
 	return nil
 }
@@ -87,7 +94,7 @@ func (drawer *CharacterDrawer) ChangeState(nextStateName string) error {
 		return errors.New("CharacterDrawer is not running")
 	}
 
-	if drawer.subState != playCurrentState {
+	if drawer.nextStateName != nil || drawer.subState != ssPlayCurrentState {
 		return errors.New("CharacterDrawer is already making a state change")
 	}
 
@@ -95,10 +102,11 @@ func (drawer *CharacterDrawer) ChangeState(nextStateName string) error {
 		return nil
 	}
 
-	drawer.nextStateName = nextStateName
-	drawer.subState = startChangeState
-
+	drawer.nextStateName = &nextStateName
+	drawer.subState = ssInitChangeState
 	drawer.stateChangedCond.Wait()
+	drawer.nextStateName = nil
+
 	return drawer.stateChangedError
 }
 
@@ -113,8 +121,7 @@ func (drawer *CharacterDrawer) doDraw() {
 		}
 
 		showNextFrameTime = showNextFrameTime.Add(showFrameDuration)
-		d := time.Until(showNextFrameTime)
-		if d <= 0 {
+		if time.Until(showNextFrameTime) <= 0 {
 			droppedFrameCount++
 			if droppedFrameCount%100 == 0 {
 				fmt.Printf("CharacterDrawer: the number of dropped frames: %v\n", droppedFrameCount)
@@ -123,7 +130,7 @@ func (drawer *CharacterDrawer) doDraw() {
 		}
 
 		frame.Draw(drawer.paintEngine)
-		time.Sleep(d)
+		time.Sleep(time.Until(showNextFrameTime))
 	}
 }
 
@@ -135,19 +142,20 @@ func (drawer *CharacterDrawer) getCurremtFrame() *DeltaFrame {
 		return nil
 	}
 
-	if drawer.subState == playCurrentState {
+	if drawer.subState == ssPlayCurrentState {
 		return drawer.getCurrentStateFrame()
 	}
 
-	if drawer.subState == startChangeState {
-		drawer.subState = findTransitionFrame
+	if drawer.subState == ssInitChangeState {
+		drawer.subState = ssFindTransitionFrame
 		drawer.startFindTransitionFrameNum = drawer.currentFrameNum
 	}
 
-	if drawer.subState == findTransitionFrame {
+	if drawer.subState == ssFindTransitionFrame {
 		return drawer.tryInitTransitionToNextState()
 	}
 
+	// ssTransitionToNextState
 	return drawer.getCurrentTransitionFrame()
 }
 
@@ -165,7 +173,7 @@ func (drawer *CharacterDrawer) tryInitTransitionToNextState() *DeltaFrame {
 		return frame
 	}
 
-	transitionFrameSeriesName := frame.GetSeriesForTransition(drawer.nextStateName)
+	transitionFrameSeriesName := frame.GetSeriesForTransition(*drawer.nextStateName)
 	if transitionFrameSeriesName == nil {
 		drawer.checkFindTransitionFrameLooping()
 		return frame
@@ -178,32 +186,29 @@ func (drawer *CharacterDrawer) tryInitTransitionToNextState() *DeltaFrame {
 		return frame
 	}
 
-	drawer.subState = transitionToNextState
+	drawer.subState = ssTransitionToNextState
 	drawer.playedFrames = transitionFrameSeries.Frames
 	drawer.currentFrameNum = 0
-
-	if len(transitionFrameSeries.Frames) == 0 {
-		// No transition between states is required
-		drawer.finishChangeState(nil)
-	}
 
 	return frame
 }
 
 func (drawer *CharacterDrawer) getCurrentTransitionFrame() *DeltaFrame {
-	frame := &drawer.playedFrames[drawer.currentFrameNum]
-	drawer.currentFrameNum++
-	if drawer.currentFrameNum >= len(drawer.playedFrames) {
-		drawer.finishChangeState(nil)
+
+	if drawer.currentFrameNum < len(drawer.playedFrames) {
+		frame := &drawer.playedFrames[drawer.currentFrameNum]
+		drawer.currentFrameNum++
+		return frame
 	}
 
-	return frame
+	drawer.finishChangeState(nil)
+	return drawer.getCurrentStateFrame()
 }
 
 func (drawer *CharacterDrawer) checkFindTransitionFrameLooping() {
 	if drawer.currentFrameNum == drawer.startFindTransitionFrameNum {
 		err := fmt.Errorf("Could't find a transition frame for swithe transition from '%s' to '%s'",
-			drawer.stateName, drawer.nextStateName)
+			drawer.stateName, *drawer.nextStateName)
 		drawer.finishChangeState(err)
 	}
 }
@@ -212,14 +217,14 @@ func (drawer *CharacterDrawer) finishChangeState(err error) {
 	oldState := drawer.stateName
 
 	if err == nil {
-		err = drawer.setState(drawer.nextStateName)
+		err = drawer.setState(*drawer.nextStateName)
 	}
 
 	if err != nil {
-		drawer.stateChangedError = err
 		drawer.setState(oldState)
 	}
 
+	drawer.stateChangedError = err
 	drawer.stateChangedCond.Signal()
 }
 
@@ -241,7 +246,7 @@ func (drawer *CharacterDrawer) setState(stateName string) error {
 	drawer.stateName = stateName
 	drawer.playedFrames = frameSeries.Frames
 	drawer.currentFrameNum = 0
-	drawer.subState = playCurrentState
+	drawer.subState = ssPlayCurrentState
 	return nil
 }
 
