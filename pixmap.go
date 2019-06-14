@@ -16,6 +16,10 @@ type Pixmap struct {
 	PixFormat   PixelFormat
 }
 
+func init() {
+	img.Init(img.INIT_JPG | img.INIT_PNG)
+}
+
 func pixelFormatToSDL(pixelFormat PixelFormat) (uint32, error) {
 	switch pixelFormat {
 	case RGB16:
