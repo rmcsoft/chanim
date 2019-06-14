@@ -7,7 +7,7 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
-// Pixmap is
+// Pixmap contains a collection of pixels
 type Pixmap struct {
 	Data        []byte
 	Width       int

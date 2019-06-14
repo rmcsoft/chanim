@@ -129,7 +129,9 @@ func (drawer *CharacterDrawer) doDraw() {
 			continue
 		}
 
+		drawer.paintEngine.Begin()
 		frame.Draw(drawer.paintEngine)
+		drawer.paintEngine.End()
 		time.Sleep(time.Until(showNextFrameTime))
 	}
 }
