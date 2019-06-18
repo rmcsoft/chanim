@@ -1,2 +1,4 @@
+github.com/NeowayLabs/drm v0.0.0-20171110144356-4ff39c905c74 h1:kyA1TaQ7xa1VYC9u8OCs19IoTcttjxV/Fo5CCm5oczs=
+github.com/NeowayLabs/drm v0.0.0-20171110144356-4ff39c905c74/go.mod h1:B8Pf8lJWIsLTs7oyWkXOWOGAZiQQVomlZurKAgx8HBA=
 github.com/veandco/go-sdl2 v0.3.0 h1:IWYkHMp8V3v37NsKjszln8FFnX2+ab0538J371t+rss=
 github.com/veandco/go-sdl2 v0.3.0/go.mod h1:FB+kTpX9YTE+urhYiClnRzpOXbiWgaU3+5F2AB78DPg=
