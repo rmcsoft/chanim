@@ -9,3 +9,15 @@ const (
 	// RGB16 is 16-bit RGB format (5-6-5)
 	RGB16
 )
+
+// GetPixelSize gets pixel size
+func GetPixelSize(pixFormat PixelFormat) int {
+	switch pixFormat {
+	case RGB32:
+		return 4
+	case RGB16:
+		return 2
+	default:
+		panic("Unsupported PixelFormat")
+	}
+}
