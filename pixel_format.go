@@ -21,3 +21,14 @@ func GetPixelSize(pixFormat PixelFormat) int {
 		panic("Unsupported PixelFormat")
 	}
 }
+
+func GetBPP(pixFormat PixelFormat) int {
+	switch pixFormat {
+	case RGB32:
+		return 32
+	case RGB16:
+		return 16
+	default:
+		panic("Unsupported PixelFormat")
+	}
+}
