@@ -58,7 +58,7 @@ Rect intersect(const Rect* r1, const Rect* r2) {
 	if (ret.height < 0)
 		ret.height = 0;
 
-		return ret;
+	return ret;
 }
 
 static
@@ -84,7 +84,7 @@ void drawPixmap(Pixmap* fb, int pixSize, const Pixmap* pixmap) {
 	int dstOffset = max(fb->rect.x, r.x) * pixSize;
 
 	for (int i = 0; i < r.height; ++i) {
-		char* srcRow = pixmap->data + (srcStartRow + i) * pixmap->bytePerLine;
+		const char* srcRow = pixmap->data + (srcStartRow + i) * pixmap->bytePerLine;
 		char* dstRow = fb->data + (dstStartRow + i) * fb->bytePerLine;
 		memcpy(dstRow + dstOffset, srcRow + srcOffset, copySize);
 	}
@@ -117,8 +117,10 @@ import "C"
 
 import (
 	"errors"
+	"fmt"
 	"image"
 	"os"
+	"syscall"
 	"unsafe"
 
 	"github.com/NeowayLabs/drm"
@@ -130,20 +132,24 @@ const (
 )
 
 type framebuffer struct {
-	fb     *mode.FB
+	handle uint32
+	id     uint32
+	buf    []byte
+
 	pixmap C.Pixmap
 }
 
 // KMSDRMPaintEngine is PaintEngine for kmsdrm
 type KMSDRMPaintEngine struct {
-	card      *os.File
-	crtc      *mode.Crtc
+	card    *os.File
+	modeset mode.Modeset
+
 	pixFormat PixelFormat
 	pixSize   int
 	viewport  image.Rectangle
 
-	framebuffers      [2]framebuffer
-	activeFramebuffer int
+	framebuffers        []*framebuffer
+	frontFrameBufferNum int
 
 	isActive bool
 	cmds     []C.Cmd
@@ -203,16 +209,16 @@ func (p *KMSDRMPaintEngine) End() error {
 		return errors.New("KMSDRMPaintEngine is not active")
 	}
 
-	activeFb := &p.framebuffers[p.activeFramebuffer]
+	frontFrameBuffer := p.framebuffers[p.frontFrameBufferNum]
 	var cmds *C.Cmd
 	if len(p.cmds) > 0 {
 		cmds = &p.cmds[0]
 	}
-	C.playCmds(&activeFb.pixmap, C.int(p.pixSize), cmds, C.int(len(p.cmds)))
+	C.playCmds(&frontFrameBuffer.pixmap, C.int(p.pixSize), cmds, C.int(len(p.cmds)))
 
 	p.cmds = p.cmds[:0]
 	p.isActive = false
-	p.activeFramebuffer = (p.activeFramebuffer + 1) % len(p.framebuffers)
+	p.frontFrameBufferNum = (p.frontFrameBufferNum + 1) % len(p.framebuffers)
 	return nil
 }
 
@@ -221,6 +227,10 @@ func NewKMSDRMPaintEngine(cardNum int, pixFormat PixelFormat, viewport image.Rec
 	card, err := drm.OpenCard(cardNum)
 	if err != nil {
 		return nil, err
+	}
+
+	if !drm.HasDumbBuffer(card) {
+		return nil, fmt.Errorf("drm device %v does not support dumb buffers", cardNum)
 	}
 
 	paintEngine := KMSDRMPaintEngine{
@@ -232,6 +242,25 @@ func NewKMSDRMPaintEngine(cardNum int, pixFormat PixelFormat, viewport image.Rec
 		cmds:      make([]C.Cmd, 0, startCmdCapacity),
 	}
 
+	simpleMSet, err := mode.NewSimpleModeset(card)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(simpleMSet.Modesets) == 0 {
+		return nil, errors.New("Modesets is empty")
+	}
+
+	paintEngine.modeset = simpleMSet.Modesets[0]
+	paintEngine.framebuffers = []*framebuffer{}
+	for i := 0; i < 2; i++ {
+		framebuffer, err := paintEngine.createFramebuffer()
+		if err != nil {
+			return nil, err
+		}
+		paintEngine.framebuffers = append(paintEngine.framebuffers, framebuffer)
+	}
+
 	return &paintEngine, nil
 }
 
@@ -240,5 +269,70 @@ func (p *KMSDRMPaintEngine) newCmd() *C.Cmd {
 	return &p.cmds[len(p.cmds)-1]
 }
 
-func createFramebuffer(card *os.File, dev *mode.Modeset) {
+func (p *KMSDRMPaintEngine) createFramebuffer() (*framebuffer, error) {
+
+	fb := &framebuffer{}
+	var err error
+
+	defer func() {
+		if err != nil {
+			p.destroyFramebuffer(fb)
+		}
+	}()
+
+	width := p.viewport.Dx()
+	height := p.viewport.Dy()
+	bpp := GetPixelSize(p.pixFormat) * 8
+	depth := GetPixelDepth(p.pixFormat)
+
+	fbInfo, err := mode.CreateFB(p.card, uint16(width), uint16(height), uint32(bpp))
+	if err != nil {
+		return nil, err
+	}
+
+	fb.handle = fbInfo.Handle
+	fb.id, err = mode.AddFB(p.card, uint16(width), uint16(height),
+		uint8(depth), uint8(bpp), fbInfo.Pitch, fb.handle)
+	if err != nil {
+		return nil, err
+	}
+
+	offset, err := mode.MapDumb(p.card, fb.handle)
+	if err != nil {
+		return nil, err
+	}
+
+	fb.buf, err = syscall.Mmap(int(p.card.Fd()), int64(offset), int(fbInfo.Size),
+		syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED)
+	if err != nil {
+		return nil, err
+	}
+
+	fb.pixmap.rect.x = C.int(0)
+	fb.pixmap.rect.y = C.int(0)
+	fb.pixmap.rect.width = C.int(width)
+	fb.pixmap.rect.height = C.int(height)
+	fb.pixmap.data = (*C.char)(unsafe.Pointer(&fb.buf[0]))
+	fb.pixmap.bytePerLine = C.int(fbInfo.Pitch)
+
+	return fb, err
+}
+
+func (p *KMSDRMPaintEngine) destroyFramebuffer(fb *framebuffer) {
+	if fb != nil && p.card != nil {
+		if fb.id != 0 {
+			mode.RmFB(p.card, fb.id)
+			fb.id = 0
+		}
+
+		if fb.handle != 0 {
+			mode.DestroyDumb(p.card, fb.handle)
+			fb.handle = 0
+		}
+
+		if fb.buf != nil {
+			syscall.Munmap(fb.buf)
+			fb.buf = nil
+		}
+	}
 }
