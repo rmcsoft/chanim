@@ -1,7 +1,6 @@
 package chanim
 
-// Frame is a frame that is not drawn completely, but partially,
-// given the previous frame.
+// Frame contains a set of operations for drawing.
 type Frame struct {
 	drawOperations []DrawOperation
 	transitions    []Transition
