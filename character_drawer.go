@@ -39,7 +39,7 @@ type CharacterDrawer struct {
 
 	subState subState
 
-	playedFrames    []DeltaFrame
+	playedFrames    []Frame
 	currentFrameNum int
 
 	startFindTransitionFrameNum int
@@ -136,7 +136,7 @@ func (drawer *CharacterDrawer) doDraw() {
 	}
 }
 
-func (drawer *CharacterDrawer) getCurremtFrame() *DeltaFrame {
+func (drawer *CharacterDrawer) getCurremtFrame() *Frame {
 	drawer.mutex.Lock()
 	defer drawer.mutex.Unlock()
 
@@ -161,13 +161,13 @@ func (drawer *CharacterDrawer) getCurremtFrame() *DeltaFrame {
 	return drawer.getCurrentTransitionFrame()
 }
 
-func (drawer *CharacterDrawer) getCurrentStateFrame() *DeltaFrame {
+func (drawer *CharacterDrawer) getCurrentStateFrame() *Frame {
 	frame := &drawer.playedFrames[drawer.currentFrameNum]
 	drawer.currentFrameNum = (drawer.currentFrameNum + 1) % len(drawer.playedFrames)
 	return frame
 }
 
-func (drawer *CharacterDrawer) tryInitTransitionToNextState() *DeltaFrame {
+func (drawer *CharacterDrawer) tryInitTransitionToNextState() *Frame {
 	frame := drawer.getCurrentStateFrame()
 
 	if !frame.IsTransitionFrame() {
@@ -195,7 +195,7 @@ func (drawer *CharacterDrawer) tryInitTransitionToNextState() *DeltaFrame {
 	return frame
 }
 
-func (drawer *CharacterDrawer) getCurrentTransitionFrame() *DeltaFrame {
+func (drawer *CharacterDrawer) getCurrentTransitionFrame() *Frame {
 
 	if drawer.currentFrameNum < len(drawer.playedFrames) {
 		frame := &drawer.playedFrames[drawer.currentFrameNum]
