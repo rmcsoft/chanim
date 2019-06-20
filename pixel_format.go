@@ -22,7 +22,8 @@ func GetPixelSize(pixFormat PixelFormat) int {
 	}
 }
 
-func GetBPP(pixFormat PixelFormat) int {
+// GetPixelDepth gets pixel depth
+func GetPixelDepth(pixFormat PixelFormat) int {
 	switch pixFormat {
 	case RGB32:
 		return 32
