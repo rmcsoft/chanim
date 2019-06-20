@@ -216,10 +216,14 @@ func (p *KMSDRMPaintEngine) End() error {
 	}
 	C.playCmds(&frontFrameBuffer.pixmap, C.int(p.pixSize), cmds, C.int(len(p.cmds)))
 
+	err := mode.SetCrtc(p.card, p.modeset.Crtc, frontFrameBuffer.id,
+		uint32(p.viewport.Min.X), uint32(p.viewport.Min.Y),
+		&p.modeset.Conn, 1, &p.modeset.Mode)
+
 	p.cmds = p.cmds[:0]
 	p.isActive = false
 	p.frontFrameBufferNum = (p.frontFrameBufferNum + 1) % len(p.framebuffers)
-	return nil
+	return err
 }
 
 // NewKMSDRMPaintEngine creates KMSDRMPaintEngine
