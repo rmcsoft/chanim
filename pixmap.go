@@ -32,7 +32,7 @@ func pixelFormatToSDL(pixelFormat PixelFormat) (uint32, error) {
 	case RGB16:
 		return sdl.PIXELFORMAT_RGB565, nil
 	case RGB32:
-		return sdl.PIXELFORMAT_RGB24, nil
+		return sdl.PIXELFORMAT_ARGB8888, nil
 	default:
 		return 0, errors.New("Unsupported pixel format")
 	}
