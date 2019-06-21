@@ -25,13 +25,10 @@ func (frame *Frame) IsTransitionFrame() bool {
 // GetSeriesForTransition returns the name of the series of frames that shuld
 // be played to move to the destState.
 func (frame *Frame) GetSeriesForTransition(destStateName string) *string {
-	if frame.Transitions == nil {
-		for _, transition := range frame.Transitions {
-			if transition.DestStateName == destStateName {
-				return &transition.FrameSeriesName
-			}
+	for _, transition := range frame.Transitions {
+		if transition.DestStateName == destStateName {
+			return &transition.FrameSeriesName
 		}
 	}
-
 	return nil
 }
