@@ -2,13 +2,13 @@ package chanim
 
 // Frame contains a set of operations for drawing.
 type Frame struct {
-	drawOperations []DrawOperation
-	transitions    []Transition
+	DrawOperations []DrawOperation
+	Transitions    []Transition
 }
 
 // Draw draws a frame delta.
 func (frame *Frame) Draw(paintEngine PaintEngine) error {
-	for _, drawOperation := range frame.drawOperations {
+	for _, drawOperation := range frame.DrawOperations {
 		err := drawOperation.Draw(paintEngine)
 		if err != nil {
 			return err
@@ -19,14 +19,14 @@ func (frame *Frame) Draw(paintEngine PaintEngine) error {
 
 // IsTransitionFrame checks is frame transitional.
 func (frame *Frame) IsTransitionFrame() bool {
-	return frame.transitions != nil
+	return frame.Transitions != nil
 }
 
 // GetSeriesForTransition returns the name of the series of frames that shuld
 // be played to move to the destState.
 func (frame *Frame) GetSeriesForTransition(destStateName string) *string {
-	if frame.transitions == nil {
-		for _, transition := range frame.transitions {
+	if frame.Transitions == nil {
+		for _, transition := range frame.Transitions {
 			if transition.DestStateName == destStateName {
 				return &transition.FrameSeriesName
 			}
