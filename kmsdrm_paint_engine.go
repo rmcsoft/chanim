@@ -139,8 +139,7 @@ type framebuffer struct {
 	pixmap C.Pixmap
 }
 
-// KMSDRMPaintEngine is PaintEngine for kmsdrm
-type KMSDRMPaintEngine struct {
+type kmsdrmPaintEngine struct {
 	card    *os.File
 	modeset mode.Modeset
 
@@ -155,8 +154,7 @@ type KMSDRMPaintEngine struct {
 	cmds     []C.Cmd
 }
 
-// Begin begins paint
-func (p *KMSDRMPaintEngine) Begin() error {
+func (p *kmsdrmPaintEngine) Begin() error {
 	if p.isActive {
 		return errors.New("KMSDRMPaintEngine is already active")
 	}
@@ -165,8 +163,7 @@ func (p *KMSDRMPaintEngine) Begin() error {
 	return nil
 }
 
-// Clear clears the rectangle
-func (p *KMSDRMPaintEngine) Clear(rect image.Rectangle) error {
+func (p *kmsdrmPaintEngine) Clear(rect image.Rectangle) error {
 	if !p.isActive {
 		return errors.New("KMSDRMPaintEngine is not active")
 	}
@@ -181,8 +178,7 @@ func (p *KMSDRMPaintEngine) Clear(rect image.Rectangle) error {
 	return nil
 }
 
-// DrawPixmap draws the Pixmap
-func (p *KMSDRMPaintEngine) DrawPixmap(top image.Point, pixmap *Pixmap) error {
+func (p *kmsdrmPaintEngine) DrawPixmap(top image.Point, pixmap *Pixmap) error {
 	if !p.isActive {
 		return errors.New("KMSDRMPaintEngine is not active")
 	}
@@ -203,8 +199,7 @@ func (p *KMSDRMPaintEngine) DrawPixmap(top image.Point, pixmap *Pixmap) error {
 	return nil
 }
 
-// End ends paint
-func (p *KMSDRMPaintEngine) End() error {
+func (p *kmsdrmPaintEngine) End() error {
 	if !p.isActive {
 		return errors.New("KMSDRMPaintEngine is not active")
 	}
@@ -237,7 +232,7 @@ func NewKMSDRMPaintEngine(cardNum int, pixFormat PixelFormat, viewport image.Rec
 		return nil, fmt.Errorf("drm device %v does not support dumb buffers", cardNum)
 	}
 
-	paintEngine := KMSDRMPaintEngine{
+	paintEngine := kmsdrmPaintEngine{
 		card:      card,
 		pixFormat: pixFormat,
 		pixSize:   GetPixelSize(pixFormat),
@@ -268,12 +263,12 @@ func NewKMSDRMPaintEngine(cardNum int, pixFormat PixelFormat, viewport image.Rec
 	return &paintEngine, nil
 }
 
-func (p *KMSDRMPaintEngine) newCmd() *C.Cmd {
+func (p *kmsdrmPaintEngine) newCmd() *C.Cmd {
 	p.cmds = append(p.cmds)
 	return &p.cmds[len(p.cmds)-1]
 }
 
-func (p *KMSDRMPaintEngine) createFramebuffer() (*framebuffer, error) {
+func (p *kmsdrmPaintEngine) createFramebuffer() (*framebuffer, error) {
 
 	fb := &framebuffer{}
 	var err error
@@ -322,7 +317,7 @@ func (p *KMSDRMPaintEngine) createFramebuffer() (*framebuffer, error) {
 	return fb, err
 }
 
-func (p *KMSDRMPaintEngine) destroyFramebuffer(fb *framebuffer) {
+func (p *kmsdrmPaintEngine) destroyFramebuffer(fb *framebuffer) {
 	if fb != nil && p.card != nil {
 		if fb.id != 0 {
 			mode.RmFB(p.card, fb.id)

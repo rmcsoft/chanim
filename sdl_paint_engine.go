@@ -10,29 +10,26 @@ func init() {
 	sdl.Init(sdl.INIT_VIDEO)
 }
 
-// SDLPaintEngine is PaintEngine for kmsdrm
-type SDLPaintEngine struct {
+type sdlPaintEngine struct {
 	window   *sdl.Window
 	renderer *sdl.Renderer
 }
 
 // NewSDLPaintEngine creates NewSDLPaintEngine
-func NewSDLPaintEngine(width int, height int) (*SDLPaintEngine, error) {
+func NewSDLPaintEngine(width int, height int) (PaintEngine, error) {
 	window, renderer, err := sdl.CreateWindowAndRenderer(int32(width), int32(height), 0)
 	if err != nil {
 		return nil, err
 	}
 
-	return &SDLPaintEngine{window, renderer}, nil
+	return &sdlPaintEngine{window, renderer}, nil
 }
 
-// Begin begins paint
-func (p *SDLPaintEngine) Begin() error {
-	return nil
+func (p *sdlPaintEngine) Begin() error {
+	return p.renderer.Clear()
 }
 
-// Clear clears the rectangle
-func (p *SDLPaintEngine) Clear(rect image.Rectangle) error {
+func (p *sdlPaintEngine) Clear(rect image.Rectangle) error {
 	sdlRect := sdl.Rect{
 		X: int32(rect.Min.X),
 		Y: int32(rect.Min.Y),
@@ -42,8 +39,7 @@ func (p *SDLPaintEngine) Clear(rect image.Rectangle) error {
 	return p.renderer.FillRect(&sdlRect)
 }
 
-// DrawPixmap draws the Pixmap
-func (p *SDLPaintEngine) DrawPixmap(top image.Point, pixmap *Pixmap) error {
+func (p *sdlPaintEngine) DrawPixmap(top image.Point, pixmap *Pixmap) error {
 	sdlPixFormat, err := pixelFormatToSDL(pixmap.PixFormat)
 	if err != nil {
 		return err
@@ -63,9 +59,11 @@ func (p *SDLPaintEngine) DrawPixmap(top image.Point, pixmap *Pixmap) error {
 
 	rowSize := pixmap.Width * GetPixelSize(pixmap.PixFormat)
 	for rowNum := 0; rowNum < pixmap.Height; rowNum++ {
-		pixmapRow := pixmap.Data[rowNum*pixmap.BytePerLine : rowSize]
-		textureRow := texturePixels[rowNum*textureBytePerLine : rowSize]
-		copy(pixmapRow, textureRow)
+		pixmapOffset := rowNum * pixmap.BytePerLine
+		pixmapRow := pixmap.Data[pixmapOffset : pixmapOffset+rowSize]
+		textureOffset := rowNum * textureBytePerLine
+		textureRow := texturePixels[textureOffset : textureOffset+rowSize]
+		copy(textureRow, pixmapRow)
 	}
 	texture.Unlock()
 
@@ -78,8 +76,7 @@ func (p *SDLPaintEngine) DrawPixmap(top image.Point, pixmap *Pixmap) error {
 	return p.renderer.Copy(texture, nil, &sdlRect)
 }
 
-// End ends paint
-func (p *SDLPaintEngine) End() error {
+func (p *sdlPaintEngine) End() error {
 	p.renderer.Present()
 	return nil
 }
