@@ -49,7 +49,7 @@ Rect intersect(const Rect* r1, const Rect* r2) {
 	Rect ret;
 
 	ret.x = max(r1->x, r2->x);
-	ret.width = min(r1->x + r1->width, r1->x + r1->width) - ret.x;
+	ret.width = min(r1->x + r1->width, r2->x + r2->width) - ret.x;
 	if (ret.width < 0)
 		ret.width = 0;
 
@@ -78,10 +78,10 @@ static
 void drawPixmap(Pixmap* fb, int pixSize, const Pixmap* pixmap) {
 	Rect r = intersect(&fb->rect, &pixmap->rect);
 	int copySize = r.width * pixSize;
-	int srcStartRow = max(pixmap->rect.y, r.y);
-	int srcOffset = max(pixmap->rect.x, r.x) * pixSize;
-	int dstStartRow = max(fb->rect.y, r.y);
-	int dstOffset = max(fb->rect.x, r.x) * pixSize;
+	int srcStartRow = pixmap->rect.y - r.y;
+	int srcOffset = (pixmap->rect.x - r.x) * pixSize;
+	int dstStartRow = r.y;
+	int dstOffset = r.x * pixSize;
 
 	for (int i = 0; i < r.height; ++i) {
 		const char* srcRow = pixmap->data + (srcStartRow + i) * pixmap->bytePerLine;
@@ -90,15 +90,9 @@ void drawPixmap(Pixmap* fb, int pixSize, const Pixmap* pixmap) {
 	}
 }
 
-static inline
-void clearPixmap(Pixmap* pixmap, int pixSize) {
-	clearRect(pixmap, pixSize, &pixmap->rect);
-}
-
 void playCmds(Pixmap* fb, int pixSize, Cmd* cmds, int cmdCount) {
 	int i;
 
-	clearPixmap(fb, pixSize);
 	for (i = 0; i < cmdCount; ++i) {
 		switch (cmds[i].code) {
 		case ccClearRect:
@@ -160,6 +154,7 @@ func (p *kmsdrmPaintEngine) Begin() error {
 	}
 
 	p.isActive = true
+	p.clearViewport()
 	return nil
 }
 
@@ -168,13 +163,15 @@ func (p *kmsdrmPaintEngine) Clear(rect image.Rectangle) error {
 		return errors.New("KMSDRMPaintEngine is not active")
 	}
 
+	rect = p.mapToFramebuffer(rect)
+
 	cmd := p.newCmd()
 	cmd.code = C.ccClearRect
 	cmdRect := (*C.Rect)(unsafe.Pointer(&cmd.data[0]))
 	cmdRect.x = C.int(rect.Min.X)
 	cmdRect.y = C.int(rect.Min.Y)
-	cmdRect.width = C.int(rect.Max.X - rect.Min.X)
-	cmdRect.height = C.int(rect.Max.Y - rect.Min.Y)
+	cmdRect.width = C.int(rect.Dx())
+	cmdRect.height = C.int(rect.Dy())
 	return nil
 }
 
@@ -187,13 +184,15 @@ func (p *kmsdrmPaintEngine) DrawPixmap(top image.Point, pixmap *Pixmap) error {
 		return errors.New("Pixmap has invalid pixel format")
 	}
 
+	rect := p.mapToFramebuffer(image.Rect(top.X, top.Y, top.X+pixmap.Width, top.Y+pixmap.Height))
+
 	cmd := p.newCmd()
 	cmd.code = C.ccDrawPixmap
 	cmdPixmap := (*C.Pixmap)(unsafe.Pointer(&cmd.data[0]))
-	cmdPixmap.rect.x = C.int(top.X)
-	cmdPixmap.rect.y = C.int(top.Y)
-	cmdPixmap.rect.width = C.int(pixmap.Width)
-	cmdPixmap.rect.height = C.int(pixmap.Height)
+	cmdPixmap.rect.x = C.int(rect.Min.X)
+	cmdPixmap.rect.y = C.int(rect.Min.Y)
+	cmdPixmap.rect.width = C.int(rect.Dx())
+	cmdPixmap.rect.height = C.int(rect.Dy())
 	cmdPixmap.bytePerLine = C.int(pixmap.BytePerLine)
 	cmdPixmap.data = (*C.char)(unsafe.Pointer(&pixmap.Data[0]))
 	return nil
@@ -212,8 +211,11 @@ func (p *kmsdrmPaintEngine) End() error {
 	C.playCmds(&frontFrameBuffer.pixmap, C.int(p.pixSize), cmds, C.int(len(p.cmds)))
 
 	err := mode.SetCrtc(p.card, p.modeset.Crtc, frontFrameBuffer.id,
-		uint32(p.viewport.Min.X), uint32(p.viewport.Min.Y),
-		&p.modeset.Conn, 1, &p.modeset.Mode)
+		0, 0, &p.modeset.Conn, 1, &p.modeset.Mode)
+
+	if err != nil {
+		fmt.Printf("SetCrtc error=%v\n", err)
+	}
 
 	p.cmds = p.cmds[:0]
 	p.isActive = false
@@ -279,8 +281,8 @@ func (p *kmsdrmPaintEngine) createFramebuffer() (*framebuffer, error) {
 		}
 	}()
 
-	width := p.viewport.Dx()
-	height := p.viewport.Dy()
+	width := p.modeset.Width
+	height := p.modeset.Height
 	bpp := GetPixelSize(p.pixFormat) * 8
 	depth := GetPixelDepth(p.pixFormat)
 
@@ -334,4 +336,18 @@ func (p *kmsdrmPaintEngine) destroyFramebuffer(fb *framebuffer) {
 			fb.buf = nil
 		}
 	}
+}
+
+func (p *kmsdrmPaintEngine) mapToFramebuffer(rect image.Rectangle) image.Rectangle {
+	return rect.Add(p.viewport.Min).Intersect(p.viewport)
+}
+
+func (p *kmsdrmPaintEngine) clearViewport() {
+	cmd := p.newCmd()
+	cmd.code = C.ccClearRect
+	cmdRect := (*C.Rect)(unsafe.Pointer(&cmd.data[0]))
+	cmdRect.x = C.int(p.viewport.Min.X)
+	cmdRect.y = C.int(p.viewport.Min.Y)
+	cmdRect.width = C.int(p.viewport.Dx())
+	cmdRect.height = C.int(p.viewport.Dy())
 }
