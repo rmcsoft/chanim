@@ -264,7 +264,7 @@ func NewKMSDRMPaintEngine(cardNum int, pixFormat PixelFormat, viewport image.Rec
 }
 
 func (p *kmsdrmPaintEngine) newCmd() *C.Cmd {
-	p.cmds = append(p.cmds)
+	p.cmds = append(p.cmds, C.Cmd{})
 	return &p.cmds[len(p.cmds)-1]
 }
 
