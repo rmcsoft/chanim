@@ -5,7 +5,7 @@ import (
 	"image"
 	"reflect"
 
-	"github.com/alekseevx/chanim"
+	"github.com/rmcsoft/chanim"
 )
 
 const (

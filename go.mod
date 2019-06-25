@@ -1,4 +1,4 @@
-module github.com/alekseevx/chanim
+module github.com/rmcsoft/chanim
 
 go 1.12
 
