@@ -117,8 +117,8 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/NeowayLabs/drm"
-	"github.com/NeowayLabs/drm/mode"
+	"github.com/rmcsoft/drm"
+	"github.com/rmcsoft/drm/mode"
 )
 
 const (
