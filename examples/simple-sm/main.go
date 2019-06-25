@@ -9,10 +9,10 @@ import (
 )
 
 const (
-	width           = 1024
+	width           = 600
 	height          = 600
 	whiteSquareSize = 128
-	pixFormat       = chanim.RGB32
+	pixFormat       = chanim.RGB16
 	dx              = 5
 	dy              = 5
 )
@@ -174,7 +174,10 @@ func makeTransitionsFromVStatToHStat(vFrameSeries chanim.FrameSeries) []chanim.F
 }
 
 func makePaintEngine() chanim.PaintEngine {
-	paintEngine, err := chanim.NewSDLPaintEngine(width, height)
+	// paintEngine, err := chanim.NewSDLPaintEngine(width, height)
+	top := image.Point{100, 100}
+	viewport := image.Rect(top.X, top.Y, top.X+width, top.Y+height)
+	paintEngine, err := chanim.NewKMSDRMPaintEngine(0, pixFormat, viewport)
 	if err != nil {
 		panic(err)
 	}

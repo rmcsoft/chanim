@@ -2,12 +2,22 @@ package chanim
 
 import (
 	"image"
+	"sync"
 
 	"github.com/veandco/go-sdl2/sdl"
 )
 
-func init() {
-	sdl.Init(sdl.INIT_VIDEO)
+var mutexSdlInit = sync.Mutex{}
+var sdlInited = false
+
+func initSdl() {
+	mutexSdlInit.Lock()
+	defer mutexSdlInit.Unlock()
+
+	if !sdlInited {
+		sdl.Init(sdl.INIT_VIDEO)
+		sdlInited = true
+	}
 }
 
 type sdlPaintEngine struct {
