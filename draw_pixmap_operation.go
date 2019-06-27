@@ -2,18 +2,18 @@ package chanim
 
 import "image"
 
-type drawPixmapOperations struct {
+type drawPixmapOperation struct {
 	top    image.Point
 	pixmap *Pixmap
 }
 
-func (o *drawPixmapOperations) Draw(paintEngine PaintEngine) error {
+func (o *drawPixmapOperation) Draw(paintEngine PaintEngine) error {
 	return paintEngine.DrawPixmap(o.top, o.pixmap)
 }
 
-// NewDrawPixmapOperations creates an operation to draw the pixmap.
-func NewDrawPixmapOperations(top image.Point, pixmap *Pixmap) DrawOperation {
-	return &drawPixmapOperations{
+// NewDrawPixmapOperation creates an operation to draw the pixmap.
+func NewDrawPixmapOperation(top image.Point, pixmap *Pixmap) DrawOperation {
+	return &drawPixmapOperation{
 		top:    top,
 		pixmap: pixmap,
 	}

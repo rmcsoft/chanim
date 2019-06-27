@@ -58,7 +58,8 @@ func makeVFrames(start int, end int) []chanim.Frame {
 		frames = append(frames,
 			chanim.Frame{
 				DrawOperations: []chanim.DrawOperation{
-					chanim.NewDrawPixmapOperations(top, whiteSquare),
+					chanim.NewClearDrawOperation(image.Rect(0, 0, width, height)),
+					chanim.NewDrawPixmapOperation(top, whiteSquare),
 				},
 			},
 		)
@@ -95,7 +96,8 @@ func makeHFrames(start int, end int) []chanim.Frame {
 		frames = append(frames,
 			chanim.Frame{
 				DrawOperations: []chanim.DrawOperation{
-					chanim.NewDrawPixmapOperations(top, whiteSquare),
+					chanim.NewClearDrawOperation(image.Rect(0, 0, width, height)),
+					chanim.NewDrawPixmapOperation(top, whiteSquare),
 				},
 			},
 		)
@@ -119,7 +121,7 @@ func makeHFrameSeries() chanim.FrameSeries {
 }
 
 func getWhiteSquareCoord(frame *chanim.Frame) image.Point {
-	o := frame.DrawOperations[0]
+	o := frame.DrawOperations[1]
 	top := reflect.ValueOf(o).Elem().FieldByName("top")
 	return image.Point{
 		int(top.FieldByName("X").Int()),
