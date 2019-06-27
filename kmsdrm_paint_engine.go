@@ -7,6 +7,7 @@ package chanim
 #include <stddef.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
 
 typedef struct {
 	int x;
@@ -18,12 +19,14 @@ typedef struct {
 typedef struct {
 	Rect rect;
 	char* data;
+	int dataSize;
 	int bytePerLine;
 } Pixmap;
 
 typedef enum {
 	ccClearRect,
-	ccDrawPixmap
+	ccDrawPixmap,
+	ccDrawPackedPixmap
 } CmdCode;
 
 typedef struct {
@@ -90,6 +93,39 @@ void drawPixmap(Pixmap* fb, int pixSize, const Pixmap* pixmap) {
 	}
 }
 
+static
+void drawPackedPixmapU16(Pixmap* fb, const Pixmap* pixmap) {
+	uint8_t* inPos = (uint8_t*)pixmap->data;
+	uint8_t* inEnd = inPos + pixmap->dataSize;
+
+	int lineNum = 0;
+	uint16_t* outPos = (uint16_t*)fb->data;
+	while (inPos != inEnd) {
+		int pixCount = *inPos++;
+		if (pixCount == 0) {
+			// Line finished
+			++lineNum;
+			outPos = (uint16_t*)(fb->data + lineNum*fb->bytePerLine);
+			continue;
+		}
+
+		{
+			uint16_t pix = *((uint16_t*)inPos);
+			uint16_t* outEnd = outPos + pixCount;
+			while (outPos != outEnd) {
+				*outPos++ = pix;
+			}
+		}
+		inPos += sizeof(uint16_t);
+	}
+}
+
+static
+void drawPackedPixmap(Pixmap* fb, int pixSize, const Pixmap* pixmap) {
+	if (pixSize == 2)
+		drawPackedPixmapU16(fb, pixmap);
+}
+
 void playCmds(Pixmap* fb, int pixSize, Cmd* cmds, int cmdCount) {
 	int i;
 
@@ -100,6 +136,9 @@ void playCmds(Pixmap* fb, int pixSize, Cmd* cmds, int cmdCount) {
 			break;
 		case ccDrawPixmap:
 			drawPixmap(fb, pixSize, &cmds[i].data.pixmap);
+			break;
+		case ccDrawPackedPixmap:
+			drawPackedPixmap(fb, pixSize, &cmds[i].data.pixmap);
 			break;
 		default:
 			break;
@@ -117,7 +156,7 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/rmcsoft/godrm"
+	drm "github.com/rmcsoft/godrm"
 	"github.com/rmcsoft/godrm/mode"
 )
 
@@ -154,7 +193,6 @@ func (p *kmsdrmPaintEngine) Begin() error {
 	}
 
 	p.isActive = true
-	p.clearViewport()
 	return nil
 }
 
@@ -195,6 +233,32 @@ func (p *kmsdrmPaintEngine) DrawPixmap(top image.Point, pixmap *Pixmap) error {
 	cmdPixmap.rect.height = C.int(rect.Dy())
 	cmdPixmap.bytePerLine = C.int(pixmap.BytePerLine)
 	cmdPixmap.data = (*C.char)(unsafe.Pointer(&pixmap.Data[0]))
+	return nil
+}
+
+func (p *kmsdrmPaintEngine) DrawPackedPixmap(top image.Point, pixmap *PackedPixmap) error {
+	if !p.isActive {
+		return errors.New("KMSDRMPaintEngine is not active")
+	}
+
+	if p.pixFormat != pixmap.PixFormat {
+		return errors.New("PackedPixmap has invalid pixel format")
+	}
+
+	rect := p.mapToFramebuffer(image.Rect(top.X, top.Y, top.X+pixmap.Width, top.Y+pixmap.Height))
+	if !p.viewport.Eq(rect) {
+		return errors.New("top or pixmap size  is invalid")
+	}
+
+	cmd := p.newCmd()
+	cmd.code = C.ccDrawPackedPixmap
+	cmdPixmap := (*C.Pixmap)(unsafe.Pointer(&cmd.data[0]))
+	cmdPixmap.rect.x = C.int(rect.Min.X)
+	cmdPixmap.rect.y = C.int(rect.Min.Y)
+	cmdPixmap.rect.width = C.int(rect.Dx())
+	cmdPixmap.rect.height = C.int(rect.Dy())
+	cmdPixmap.data = (*C.char)(unsafe.Pointer(&pixmap.Data[0]))
+	cmdPixmap.dataSize = C.int(len(pixmap.Data))
 	return nil
 }
 
@@ -340,14 +404,4 @@ func (p *kmsdrmPaintEngine) destroyFramebuffer(fb *framebuffer) {
 
 func (p *kmsdrmPaintEngine) mapToFramebuffer(rect image.Rectangle) image.Rectangle {
 	return rect.Add(p.viewport.Min).Intersect(p.viewport)
-}
-
-func (p *kmsdrmPaintEngine) clearViewport() {
-	cmd := p.newCmd()
-	cmd.code = C.ccClearRect
-	cmdRect := (*C.Rect)(unsafe.Pointer(&cmd.data[0]))
-	cmdRect.x = C.int(p.viewport.Min.X)
-	cmdRect.y = C.int(p.viewport.Min.Y)
-	cmdRect.width = C.int(p.viewport.Dx())
-	cmdRect.height = C.int(p.viewport.Dy())
 }

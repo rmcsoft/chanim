@@ -36,7 +36,7 @@ func NewSDLPaintEngine(width int, height int) (PaintEngine, error) {
 }
 
 func (p *sdlPaintEngine) Begin() error {
-	return p.renderer.Clear()
+	return nil
 }
 
 func (p *sdlPaintEngine) Clear(rect image.Rectangle) error {
@@ -84,6 +84,14 @@ func (p *sdlPaintEngine) DrawPixmap(top image.Point, pixmap *Pixmap) error {
 		H: int32(pixmap.Height),
 	}
 	return p.renderer.Copy(texture, nil, &sdlRect)
+}
+
+func (p *sdlPaintEngine) DrawPackedPixmap(top image.Point, packedPixmap *PackedPixmap) error {
+	pixmap, err := packedPixmap.Unpack()
+	if err != nil {
+		return err
+	}
+	return p.DrawPixmap(top, pixmap)
 }
 
 func (p *sdlPaintEngine) End() error {
