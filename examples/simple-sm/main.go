@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	width           = 600
+	width           = 1024
 	height          = 600
 	whiteSquareSize = 128
 	pixFormat       = chanim.RGB16
@@ -58,7 +58,7 @@ func makeVFrames(start int, end int) []chanim.Frame {
 		frames = append(frames,
 			chanim.Frame{
 				DrawOperations: []chanim.DrawOperation{
-					chanim.NewClearDrawOperation(image.Rect(0, 0, width, height)),
+					chanim.NewClearDrawOperation(image.Rect(0, 0, 2*width, 2*height)),
 					chanim.NewDrawPixmapOperation(top, whiteSquare),
 				},
 			},
@@ -96,7 +96,7 @@ func makeHFrames(start int, end int) []chanim.Frame {
 		frames = append(frames,
 			chanim.Frame{
 				DrawOperations: []chanim.DrawOperation{
-					chanim.NewClearDrawOperation(image.Rect(0, 0, width, height)),
+					chanim.NewClearDrawOperation(image.Rect(0, 0, 2*width, 2*height)),
 					chanim.NewDrawPixmapOperation(top, whiteSquare),
 				},
 			},
@@ -177,9 +177,7 @@ func makeTransitionsFromVStatToHStat(vFrameSeries chanim.FrameSeries) []chanim.F
 
 func makePaintEngine() chanim.PaintEngine {
 	// paintEngine, err := chanim.NewSDLPaintEngine(width, height)
-	top := image.Point{100, 100}
-	viewport := image.Rect(top.X, top.Y, top.X+width, top.Y+height)
-	paintEngine, err := chanim.NewKMSDRMPaintEngine(0, pixFormat, viewport)
+	paintEngine, err := chanim.NewKMSDRMPaintEngine(0, pixFormat)
 	if err != nil {
 		panic(err)
 	}

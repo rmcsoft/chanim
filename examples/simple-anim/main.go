@@ -9,8 +9,6 @@ import (
 )
 
 const (
-	width     = 1024
-	height    = 600
 	pixFormat = chanim.RGB16
 )
 
@@ -44,9 +42,7 @@ func loadFrameseries(intputDir string) chanim.FrameSeries {
 
 func makePaintEngine() chanim.PaintEngine {
 	// paintEngine, err := chanim.NewSDLPaintEngine(width, height)
-	top := image.Point{0, 0}
-	viewport := image.Rect(top.X, top.Y, top.X+width, top.Y+height)
-	paintEngine, err := chanim.NewKMSDRMPaintEngine(0, pixFormat, viewport)
+	paintEngine, err := chanim.NewKMSDRMPaintEngine(0, pixFormat)
 	if err != nil {
 		panic(err)
 	}

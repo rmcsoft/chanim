@@ -81,8 +81,8 @@ static
 void drawPixmap(Pixmap* fb, int pixSize, const Pixmap* pixmap) {
 	Rect r = intersect(&fb->rect, &pixmap->rect);
 	int copySize = r.width * pixSize;
-	int srcStartRow = pixmap->rect.y - r.y;
-	int srcOffset = (pixmap->rect.x - r.x) * pixSize;
+	int srcStartRow = r.y - pixmap->rect.y;
+	int srcOffset = (r.x - pixmap->rect.x) * pixSize;
 	int dstStartRow = r.y;
 	int dstOffset = r.x * pixSize;
 
@@ -178,7 +178,6 @@ type kmsdrmPaintEngine struct {
 
 	pixFormat PixelFormat
 	pixSize   int
-	viewport  image.Rectangle
 
 	framebuffers        []*framebuffer
 	frontFrameBufferNum int
@@ -201,8 +200,6 @@ func (p *kmsdrmPaintEngine) Clear(rect image.Rectangle) error {
 		return errors.New("KMSDRMPaintEngine is not active")
 	}
 
-	rect = p.mapToFramebuffer(rect)
-
 	cmd := p.newCmd()
 	cmd.code = C.ccClearRect
 	cmdRect := (*C.Rect)(unsafe.Pointer(&cmd.data[0]))
@@ -222,7 +219,7 @@ func (p *kmsdrmPaintEngine) DrawPixmap(top image.Point, pixmap *Pixmap) error {
 		return errors.New("Pixmap has invalid pixel format")
 	}
 
-	rect := p.mapToFramebuffer(image.Rect(top.X, top.Y, top.X+pixmap.Width, top.Y+pixmap.Height))
+	rect := image.Rect(top.X, top.Y, top.X+pixmap.Width, top.Y+pixmap.Height)
 
 	cmd := p.newCmd()
 	cmd.code = C.ccDrawPixmap
@@ -245,11 +242,17 @@ func (p *kmsdrmPaintEngine) DrawPackedPixmap(top image.Point, pixmap *PackedPixm
 		return errors.New("PackedPixmap has invalid pixel format")
 	}
 
-	rect := p.mapToFramebuffer(image.Rect(top.X, top.Y, top.X+pixmap.Width, top.Y+pixmap.Height))
-	if !p.viewport.Eq(rect) {
-		return errors.New("top or pixmap size  is invalid")
+	if !top.Eq(image.ZP) {
+		return errors.New("PackedPixmap can be drawn so far only in (0,0) coordinate")
 	}
 
+	screenWidth := int(p.framebuffers[0].pixmap.rect.width)
+	screenHeight := int(p.framebuffers[0].pixmap.rect.height)
+	if pixmap.Width > screenWidth || pixmap.Height > screenHeight {
+		return errors.New("PackedPixmap size must not exceed screen size")
+	}
+
+	rect := image.Rect(top.X, top.Y, top.X+pixmap.Width, top.Y+pixmap.Height)
 	cmd := p.newCmd()
 	cmd.code = C.ccDrawPackedPixmap
 	cmdPixmap := (*C.Pixmap)(unsafe.Pointer(&cmd.data[0]))
@@ -288,7 +291,7 @@ func (p *kmsdrmPaintEngine) End() error {
 }
 
 // NewKMSDRMPaintEngine creates KMSDRMPaintEngine
-func NewKMSDRMPaintEngine(cardNum int, pixFormat PixelFormat, viewport image.Rectangle) (PaintEngine, error) {
+func NewKMSDRMPaintEngine(cardNum int, pixFormat PixelFormat) (PaintEngine, error) {
 	card, err := drm.OpenCard(cardNum)
 	if err != nil {
 		return nil, err
@@ -302,7 +305,6 @@ func NewKMSDRMPaintEngine(cardNum int, pixFormat PixelFormat, viewport image.Rec
 		card:      card,
 		pixFormat: pixFormat,
 		pixSize:   GetPixelSize(pixFormat),
-		viewport:  viewport,
 		isActive:  false,
 		cmds:      make([]C.Cmd, 0, startCmdCapacity),
 	}
@@ -400,8 +402,4 @@ func (p *kmsdrmPaintEngine) destroyFramebuffer(fb *framebuffer) {
 			fb.buf = nil
 		}
 	}
-}
-
-func (p *kmsdrmPaintEngine) mapToFramebuffer(rect image.Rectangle) image.Rectangle {
-	return rect.Add(p.viewport.Min).Intersect(p.viewport)
 }
