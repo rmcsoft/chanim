@@ -25,8 +25,6 @@ func init() {
 	img.Init(img.INIT_JPG | img.INIT_PNG)
 }
 
-var pixmapCache = make(map[pixmapKey]*Pixmap)
-
 func pixelFormatToSDL(pixelFormat PixelFormat) (uint32, error) {
 	switch pixelFormat {
 	case RGB16:
@@ -40,11 +38,6 @@ func pixelFormatToSDL(pixelFormat PixelFormat) (uint32, error) {
 
 // LoadPixmap loads Pixmap from file
 func LoadPixmap(fileName string, pixFormat PixelFormat) (*Pixmap, error) {
-	key := pixmapKey{fileName, pixFormat}
-	if pixmap, ok := pixmapCache[key]; ok {
-		return pixmap, nil
-	}
-
 	image, err := img.Load(fileName)
 	if err != nil {
 		return nil, err
@@ -70,6 +63,5 @@ func LoadPixmap(fileName string, pixFormat PixelFormat) (*Pixmap, error) {
 		PixFormat:   pixFormat,
 	}
 	copy(pixmap.Data, convertedImage.Pixels())
-	pixmapCache[key] = &pixmap
 	return &pixmap, nil
 }
