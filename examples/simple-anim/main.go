@@ -4,7 +4,6 @@ import (
 	"image"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/rmcsoft/chanim"
 )
@@ -81,7 +80,5 @@ func main() {
 		panic(err)
 	}
 
-	for {
-		time.Sleep(time.Duration(100) * time.Millisecond)
-	}
+	select {}
 }
