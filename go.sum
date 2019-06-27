@@ -1,5 +1,7 @@
 github.com/NeowayLabs/drm v0.0.0-20171110144356-4ff39c905c74 h1:kyA1TaQ7xa1VYC9u8OCs19IoTcttjxV/Fo5CCm5oczs=
 github.com/NeowayLabs/drm v0.0.0-20171110144356-4ff39c905c74/go.mod h1:B8Pf8lJWIsLTs7oyWkXOWOGAZiQQVomlZurKAgx8HBA=
+github.com/jessevdk/go-flags v1.4.0 h1:4IU2WS7AumrZ/40jfhf4QVDMsQwqA7VEHozFRrGARJA=
+github.com/jessevdk/go-flags v1.4.0/go.mod h1:4FA24M0QyGHXBuZZK/XkWh8h0e1EYbRYJSGM75WSRxI=
 github.com/rmcsoft/drm v0.0.0-20190625071624-eb993571a25c h1:bnPQRWUsCHmU1Mc4paVz0ycLyf0syH5VgAcSXgHn5Co=
 github.com/rmcsoft/drm v0.0.0-20190625071624-eb993571a25c/go.mod h1:giJ82geJeQYI/4zm1/fJsFkhCZHLv+AjbOiZWAMrNMY=
 github.com/rmcsoft/godrm v0.0.0-20190625071624-eb993571a25c h1:rG4ifHT3HX/unVm48W5PH3JUsdq1aqvdFsYho5jSDrI=
