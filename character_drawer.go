@@ -130,7 +130,9 @@ func (drawer *CharacterDrawer) doDraw() {
 		}
 
 		drawer.paintEngine.Begin()
-		frame.Draw(drawer.paintEngine)
+		if err := frame.Draw(drawer.paintEngine); err != nil {
+			panic(err)
+		}
 		drawer.paintEngine.End()
 		time.Sleep(time.Until(showNextFrameTime))
 	}
