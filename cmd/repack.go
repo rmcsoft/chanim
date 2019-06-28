@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/jessevdk/go-flags"
 	"github.com/rmcsoft/chanim"
@@ -13,6 +13,7 @@ import (
 type options struct {
 	InputDir  string `short:"i" long:"input-dir"  description:"The input directory"`
 	OutputDir string `short:"o" long:"output-dir" description:"The output directory"`
+	NotRotate bool   `short:"n" long:"not-rotate" description:"Disable image rotate"`
 }
 
 func images(opts options) chan string {
@@ -40,13 +41,22 @@ func images(opts options) chan string {
 func parseCmd() options {
 	var opts options
 	var cmdParser = flags.NewParser(&opts, flags.Default)
+	var err error
 
-	if _, err := cmdParser.Parse(); err != nil {
+	if _, err = cmdParser.Parse(); err != nil {
 		if flagsErr, ok := err.(*flags.Error); ok && flagsErr.Type == flags.ErrHelp {
 			os.Exit(0)
 		} else {
-			os.Exit(1)
+			panic(err)
 		}
+	}
+
+	if opts.InputDir, err = filepath.Abs(opts.InputDir); err != nil {
+		panic(err)
+	}
+
+	if opts.OutputDir, err = filepath.Abs(opts.OutputDir); err != nil {
+		panic(err)
 	}
 
 	return opts
@@ -70,25 +80,73 @@ func eqPixels(a []byte, b []byte) bool {
 	return true
 }
 
-func savePackedPixmap(path string, packedPixmap []byte) {
-	err := ioutil.WriteFile(path, packedPixmap, 0644)
+func rotatePixmap(pixmap *chanim.Pixmap) *chanim.Pixmap {
+	pixSize := chanim.GetPixelSize(pixmap.PixFormat)
+	rotatedData := make([]byte, 0, pixmap.Width*pixmap.Height*pixSize)
+	for x := 0; x < pixmap.Width; x++ {
+		for y := pixmap.Height - 1; y >= 0; y-- {
+			pixOffset := y*pixmap.BytePerLine + x*pixSize
+			rotatedData = append(rotatedData, pixmap.Data[pixOffset:pixOffset+pixSize]...)
+		}
+	}
+
+	return &chanim.Pixmap{
+		Data:        rotatedData,
+		Width:       pixmap.Height,
+		Height:      pixmap.Width,
+		PixFormat:   pixmap.PixFormat,
+		BytePerLine: pixSize * pixmap.Height,
+	}
+}
+
+func savePackedPixmap(opts *options, inputImageFile string, packedPixmap *chanim.PackedPixmap) {
+	relInputPath, err := filepath.Rel(opts.InputDir, inputImageFile)
+	if err != nil {
+		panic(err)
+	}
+	relImageDir := filepath.Dir(relInputPath)
+
+	outputImageDir := filepath.Join(opts.OutputDir, relImageDir)
+	err = os.MkdirAll(outputImageDir, 0755)
+	if err != nil {
+		panic(err)
+	}
+
+	inputImageExt := filepath.Ext(inputImageFile)
+	relOutputPath := strings.TrimSuffix(relInputPath, inputImageExt) + ".ppixmap"
+	outputFile := filepath.Join(opts.OutputDir, relOutputPath)
+	err = packedPixmap.Save(outputFile)
 	if err != nil {
 		panic(err)
 	}
 }
 
+func removeOutputDir(opts *options) {
+	if err := os.RemoveAll(opts.OutputDir); err != nil {
+		if !os.IsNotExist(err) {
+			panic(err)
+		}
+	}
+}
+
 func main() {
 	opts := parseCmd()
+
+	removeOutputDir(&opts)
+
 	var packedSize int64
 	var unpackedSize int64
 	for imageFile := range images(opts) {
-		fmt.Printf("Image %s\n", imageFile)
+		fmt.Printf("Processing %s\n", imageFile)
 
 		pixmap, err := chanim.LoadPixmap(imageFile, chanim.RGB16)
 		if err != nil {
 			panic(err)
 		}
 		unpackedSize += pixmapSize(pixmap)
+		if !opts.NotRotate {
+			pixmap = rotatePixmap(pixmap)
+		}
 
 		packedPixmap, err := chanim.PackPixmap(pixmap)
 		if err != nil {
@@ -96,14 +154,11 @@ func main() {
 		}
 		packedSize += int64(len(packedPixmap.Data))
 
-		outputFile := filepath.Join(opts.OutputDir, filepath.Base(imageFile)+".ppixmap")
-		err = packedPixmap.Save(outputFile)
-		if err != nil {
-			panic(err)
-		}
+		savePackedPixmap(&opts, imageFile, packedPixmap)
 	}
+
 	fmt.Printf("---------------------------\n")
-	fmt.Printf("unpackedSize=%v\n", unpackedSize/1024/1024)
-	fmt.Printf("packedSize=%v\n", packedSize/1024/1024)
-	fmt.Printf("unpackedSize/packedSize=%v\n", unpackedSize/packedSize)
+	fmt.Printf("unpackedSize=%vM\n", float32(unpackedSize)/float32(1024*1024))
+	fmt.Printf("packedSize=%vM\n", float32(packedSize)/float32(1024*1024))
+	fmt.Printf("unpackedSize/packedSize=%v\n", float32(unpackedSize)/float32(packedSize))
 }
