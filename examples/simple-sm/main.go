@@ -184,7 +184,7 @@ func makePaintEngine() chanim.PaintEngine {
 	return paintEngine
 }
 
-func makeCharacterDrawer() *chanim.CharacterDrawer {
+func makeAnimator() *chanim.Animator {
 	hFrameSeries := makeHFrameSeries()
 	vFrameSeries := makeVFrameSeries()
 	allFrameSeries := []chanim.FrameSeries{
@@ -194,35 +194,35 @@ func makeCharacterDrawer() *chanim.CharacterDrawer {
 	allFrameSeries = append(allFrameSeries, makeTransitionsFromHStatToVStat(hFrameSeries)...)
 	allFrameSeries = append(allFrameSeries, makeTransitionsFromVStatToHStat(vFrameSeries)...)
 
-	allStates := []chanim.State{
-		chanim.State{
+	animations := chanim.Animations{
+		chanim.Animation{
 			Name:            "h",
 			FrameSeriesName: hFrameSeries.Name,
 		},
-		chanim.State{
+		chanim.Animation{
 			Name:            "v",
 			FrameSeriesName: vFrameSeries.Name,
 		},
 	}
 
 	fmt.Printf("Available states:\n")
-	for _, state := range allStates {
+	for _, state := range animations {
 		fmt.Printf("\t%s\n", state.Name)
 	}
 	fmt.Println()
 
 	paintEngine := makePaintEngine()
-	drawer, err := chanim.NewCharacterDrawer(paintEngine, allStates, allFrameSeries)
+	animator, err := chanim.NewAnimator(paintEngine, animations, allFrameSeries)
 	if err != nil {
 		panic(err)
 	}
 
-	return drawer
+	return animator
 }
 
 func main() {
-	drawer := makeCharacterDrawer()
-	err := drawer.Start("h")
+	animator := makeAnimator()
+	err := animator.Start("h")
 	if err != nil {
 		panic(err)
 	}
@@ -235,7 +235,7 @@ func main() {
 			break
 		}
 
-		err = drawer.ChangeState(newState)
+		err = animator.ChangeAnimation(newState)
 		if err != nil {
 			fmt.Println(err)
 		}

@@ -49,29 +49,29 @@ func makePaintEngine() chanim.PaintEngine {
 	return paintEngine
 }
 
-func makeCharacterDrawer(intputDir string) *chanim.CharacterDrawer {
+func makeAnimator(intputDir string) *chanim.Animator {
 	frameSeries := loadFrameseries(intputDir)
 	allFrameSeries := []chanim.FrameSeries{frameSeries}
-	allStates := []chanim.State{
-		chanim.State{
+	animations := chanim.Animations{
+		chanim.Animation{
 			Name:            "init",
 			FrameSeriesName: frameSeries.Name,
 		},
 	}
 
 	paintEngine := makePaintEngine()
-	drawer, err := chanim.NewCharacterDrawer(paintEngine, allStates, allFrameSeries)
+	animator, err := chanim.NewAnimator(paintEngine, animations, allFrameSeries)
 	if err != nil {
 		panic(err)
 	}
 
-	return drawer
+	return animator
 }
 
 func main() {
 	intputDir := os.Args[1]
-	drawer := makeCharacterDrawer(intputDir)
-	err := drawer.Start("init")
+	animator := makeAnimator(intputDir)
+	err := animator.Start("init")
 	if err != nil {
 		panic(err)
 	}
