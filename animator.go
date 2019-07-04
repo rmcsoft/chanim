@@ -59,6 +59,15 @@ func NewAnimator(paintEngine PaintEngine, animations Animations, allFrameSeries 
 	return animator, nil
 }
 
+// GetAnimationNames gets animation names
+func (animator *Animator) GetAnimationNames() []string {
+	animationNames := make([]string, 0)
+	for _, animation := range animator.animations {
+		animationNames = append(animationNames, animation.Name)
+	}
+	return animationNames
+}
+
 // Start drawing
 func (animator *Animator) Start(initAnimationName string) error {
 	animator.mutex.Lock()
