@@ -177,21 +177,27 @@ func (animator *Animator) tryInitTransitionToNextAnimation() *Frame {
 		return frame
 	}
 
-	transitionFrameSeriesName := frame.GetSeriesForTransition(*animator.nextAnimationName)
-	if transitionFrameSeriesName == nil {
+	transitionFrameSeriesName, ok := frame.GetSeriesForTransition(*animator.nextAnimationName)
+	if !ok {
 		animator.checkFindTransitionFrameLooping()
 		return frame
 	}
 
-	transitionFrameSeries := animator.findFrameSeriesByName(*transitionFrameSeriesName)
-	if transitionFrameSeries == nil {
-		err := fmt.Errorf("Could't find a series of frames named '%s'", *transitionFrameSeriesName)
-		animator.finishChangeAnimation(err)
-		return frame
+	var transitionFrames []Frame
+	if transitionFrameSeriesName != "" {
+		// To go to the next animation, need to play transition frames
+		transitionFrameSeries := animator.findFrameSeriesByName(transitionFrameSeriesName)
+		if transitionFrameSeries == nil {
+			err := fmt.Errorf("Could't find a series of frames named '%s'", transitionFrameSeriesName)
+			animator.finishChangeAnimation(err)
+			return frame
+		}
+
+		transitionFrames = transitionFrameSeries.Frames
 	}
 
 	animator.state = asTransitionToNextAnimation
-	animator.playedFrames = transitionFrameSeries.Frames
+	animator.playedFrames = transitionFrames
 	animator.currentFrameNum = 0
 
 	return frame

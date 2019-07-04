@@ -1,7 +1,7 @@
 package chanim
 
-// Transition is a transition between states
+// Transition is a transition between animation
 type Transition struct {
-	DestStateName   string
-	FrameSeriesName string
+	DestAnimationName string
+	FrameSeriesName   string
 }
