@@ -144,8 +144,8 @@ func makeTransitionsFromHStatToVStat(hFrameSeries chanim.FrameSeries) []chanim.F
 		res = append(res, transitionSeries)
 
 		frame.Transitions = append(frame.Transitions, chanim.Transition{
-			DestStateName:   "v",
-			FrameSeriesName: name,
+			DestAnimationName: "v",
+			FrameSeriesName:   name,
 		})
 	}
 
@@ -167,8 +167,8 @@ func makeTransitionsFromVStatToHStat(vFrameSeries chanim.FrameSeries) []chanim.F
 		res = append(res, transitionSeries)
 
 		frame.Transitions = append(frame.Transitions, chanim.Transition{
-			DestStateName:   "h",
-			FrameSeriesName: name,
+			DestAnimationName: "h",
+			FrameSeriesName:   name,
 		})
 	}
 
