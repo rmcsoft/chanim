@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -11,9 +13,16 @@ import (
 )
 
 type options struct {
-	InputDir  string `short:"i" long:"input-dir"  description:"The input directory"`
-	OutputDir string `short:"o" long:"output-dir" description:"The output directory"`
-	NotRotate bool   `short:"n" long:"not-rotate" description:"Disable image rotate"`
+	InputDir  string `short:"i" long:"input-dir"  required:"true" description:"The input directory"`
+	OutputDir string `short:"o" long:"output-dir" required:"true" description:"The output directory"`
+
+	NotRotate      bool `short:"n" long:"not-rotate"       description:"Disable image rotate"`
+	ClearOutputDir bool `short:"c" long:"clear-output-dir" description:"Clears the output directory."`
+}
+
+func fail(err error) {
+	fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+	os.Exit(1)
 }
 
 func images(opts options) chan string {
@@ -32,7 +41,7 @@ func images(opts options) chan string {
 
 		err := filepath.Walk(opts.InputDir, walkFn)
 		if err != nil {
-			panic(err)
+			fail(err)
 		}
 	}()
 	return ch
@@ -40,23 +49,24 @@ func images(opts options) chan string {
 
 func parseCmd() options {
 	var opts options
-	var cmdParser = flags.NewParser(&opts, flags.Default)
+	var cmdParser = flags.NewParser(&opts, flags.HelpFlag|flags.PassDoubleDash)
 	var err error
 
 	if _, err = cmdParser.Parse(); err != nil {
 		if flagsErr, ok := err.(*flags.Error); ok && flagsErr.Type == flags.ErrHelp {
+			fmt.Println(flagsErr)
 			os.Exit(0)
-		} else {
-			panic(err)
 		}
+
+		fail(err)
 	}
 
 	if opts.InputDir, err = filepath.Abs(opts.InputDir); err != nil {
-		panic(err)
+		fail(err)
 	}
 
 	if opts.OutputDir, err = filepath.Abs(opts.OutputDir); err != nil {
-		panic(err)
+		fail(err)
 	}
 
 	return opts
@@ -102,14 +112,14 @@ func rotatePixmap(pixmap *chanim.Pixmap) *chanim.Pixmap {
 func savePackedPixmap(opts *options, inputImageFile string, packedPixmap *chanim.PackedPixmap) {
 	relInputPath, err := filepath.Rel(opts.InputDir, inputImageFile)
 	if err != nil {
-		panic(err)
+		fail(err)
 	}
 	relImageDir := filepath.Dir(relInputPath)
 
 	outputImageDir := filepath.Join(opts.OutputDir, relImageDir)
 	err = os.MkdirAll(outputImageDir, 0755)
 	if err != nil {
-		panic(err)
+		fail(err)
 	}
 
 	inputImageExt := filepath.Ext(inputImageFile)
@@ -117,14 +127,23 @@ func savePackedPixmap(opts *options, inputImageFile string, packedPixmap *chanim
 	outputFile := filepath.Join(opts.OutputDir, relOutputPath)
 	err = packedPixmap.Save(outputFile)
 	if err != nil {
-		panic(err)
+		fail(err)
 	}
 }
 
-func removeOutputDir(opts *options) {
-	if err := os.RemoveAll(opts.OutputDir); err != nil {
+func clearDir(dir string) {
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
 		if !os.IsNotExist(err) {
-			panic(err)
+			fail(err)
+		}
+		return
+	}
+
+	for _, file := range files {
+		err = os.RemoveAll(path.Join(dir, file.Name()))
+		if err != nil {
+			fail(err)
 		}
 	}
 }
@@ -132,8 +151,11 @@ func removeOutputDir(opts *options) {
 func main() {
 	opts := parseCmd()
 
-	removeOutputDir(&opts)
+	if opts.ClearOutputDir {
+		clearDir(opts.OutputDir)
+	}
 
+	var imageCount int
 	var packedSize int64
 	var unpackedSize int64
 	for imageFile := range images(opts) {
@@ -141,7 +163,7 @@ func main() {
 
 		pixmap, err := chanim.LoadPixmap(imageFile, chanim.RGB16)
 		if err != nil {
-			panic(err)
+			fail(err)
 		}
 		unpackedSize += pixmapSize(pixmap)
 		if !opts.NotRotate {
@@ -150,14 +172,16 @@ func main() {
 
 		packedPixmap, err := chanim.PackPixmap(pixmap)
 		if err != nil {
-			panic(err)
+			fail(err)
 		}
 		packedSize += int64(len(packedPixmap.Data))
 
 		savePackedPixmap(&opts, imageFile, packedPixmap)
+		imageCount++
 	}
 
 	fmt.Printf("---------------------------\n")
+	fmt.Printf("Processed files=%v\n", imageCount)
 	fmt.Printf("unpackedSize=%vM\n", float32(unpackedSize)/float32(1024*1024))
 	fmt.Printf("packedSize=%vM\n", float32(packedSize)/float32(1024*1024))
 	fmt.Printf("unpackedSize/packedSize=%v\n", float32(unpackedSize)/float32(packedSize))
