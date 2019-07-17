@@ -1,10 +1,13 @@
 package chanim
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
+	"io"
 	"io/ioutil"
 	"os"
+	"syscall"
 )
 
 // PackedPixmap packed pixmap
@@ -16,7 +19,7 @@ type PackedPixmap struct {
 }
 
 // Save saves PackedPixmap
-func (packedPixmap *PackedPixmap) Save(fileName string) error {
+func (pp *PackedPixmap) Save(fileName string) error {
 	file, err := os.Create(fileName)
 	if err != nil {
 		return err
@@ -24,9 +27,9 @@ func (packedPixmap *PackedPixmap) Save(fileName string) error {
 	defer file.Close()
 
 	header := []uint32{
-		uint32(packedPixmap.PixFormat),
-		uint32(packedPixmap.Width),
-		uint32(packedPixmap.Height),
+		uint32(pp.PixFormat),
+		uint32(pp.Width),
+		uint32(pp.Height),
 	}
 	for _, v := range header {
 		err = binary.Write(file, binary.LittleEndian, v)
@@ -35,7 +38,7 @@ func (packedPixmap *PackedPixmap) Save(fileName string) error {
 		}
 	}
 
-	_, err = file.Write(packedPixmap.Data)
+	_, err = file.Write(pp.Data)
 	if err != nil {
 		return err
 	}
@@ -49,21 +52,21 @@ func (packedPixmap *PackedPixmap) Save(fileName string) error {
 }
 
 // Unpack unpacks PackedPixmap
-func (packedPixmap *PackedPixmap) Unpack() (*Pixmap, error) {
-	pixSize := GetPixelSize(packedPixmap.PixFormat)
+func (pp *PackedPixmap) Unpack() (*Pixmap, error) {
+	pixSize := GetPixelSize(pp.PixFormat)
 
-	unpackedDataSize := packedPixmap.Width * packedPixmap.Height * pixSize
+	unpackedDataSize := pp.Width * pp.Height * pixSize
 	unpackedData := make([]byte, 0, unpackedDataSize)
 
 	pix := make([]byte, pixSize)
 
 	rowCount := 0
 	rowSize := 0
-	for pos := 0; pos < len(packedPixmap.Data); {
-		pixCount := int(packedPixmap.Data[pos])
+	for pos := 0; pos < len(pp.Data); {
+		pixCount := int(pp.Data[pos])
 		if pixCount == 0 {
 			// New row
-			if rowSize != packedPixmap.Width {
+			if rowSize != pp.Width {
 				return nil, errors.New("Invalid data")
 			}
 
@@ -74,10 +77,10 @@ func (packedPixmap *PackedPixmap) Unpack() (*Pixmap, error) {
 			continue
 		}
 		pos++
-		if pos+pixSize >= len(packedPixmap.Data) {
+		if pos+pixSize >= len(pp.Data) {
 			return nil, errors.New("Invalid data")
 		}
-		copy(pix, packedPixmap.Data[pos:pos+pixSize])
+		copy(pix, pp.Data[pos:pos+pixSize])
 		for i := 0; i < pixCount; i++ {
 			unpackedData = append(unpackedData, pix...)
 		}
@@ -86,16 +89,16 @@ func (packedPixmap *PackedPixmap) Unpack() (*Pixmap, error) {
 		pos += pixSize
 	}
 
-	if rowCount != packedPixmap.Height {
+	if rowCount != pp.Height {
 		return nil, errors.New("Invalid data")
 	}
 
 	pixmap := &Pixmap{
 		Data:        unpackedData,
-		Width:       packedPixmap.Width,
-		Height:      packedPixmap.Height,
-		PixFormat:   packedPixmap.PixFormat,
-		BytePerLine: packedPixmap.Width * pixSize,
+		Width:       pp.Width,
+		Height:      pp.Height,
+		PixFormat:   pp.PixFormat,
+		BytePerLine: pp.Width * pixSize,
 	}
 	return pixmap, nil
 }
@@ -111,17 +114,14 @@ func u32ToPixFormat(val uint32) (PixelFormat, error) {
 	}
 }
 
-// LoadPackedPixmap loads LoadPacked
-func LoadPackedPixmap(fileName string) (*PackedPixmap, error) {
-	file, err := os.Open(fileName)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
+const rawHeaderSize = 3 * 4
 
-	header := [3]uint32{}
+type rawHeader [3]uint32
+
+func parseHeader(reader io.Reader) (*PackedPixmap, error) {
+	header := rawHeader{}
 	for i := 0; i < len(header); i++ {
-		err = binary.Read(file, binary.LittleEndian, &header[i])
+		err := binary.Read(reader, binary.LittleEndian, &header[i])
 		if err != nil {
 			return nil, err
 		}
@@ -138,25 +138,28 @@ func LoadPackedPixmap(fileName string) (*PackedPixmap, error) {
 	if height < 0 || height > 32000 {
 		return nil, errors.New("Invalid height")
 	}
+	return &PackedPixmap{
+		Width:     width,
+		Height:    height,
+		PixFormat: pixFormat,
+	}, nil
+}
 
-	data, err := ioutil.ReadAll(file)
-	if err != nil {
-		return nil, err
+// Check checks PackedPixmap
+func (pp *PackedPixmap) Check() error {
+	if pp.Width*pp.Height > 0 && len(pp.Data) == 0 {
+		return errors.New("Invalid data")
 	}
 
-	if width*height > 0 && len(data) == 0 {
-		return nil, errors.New("Invalid data")
-	}
-
-	pixSize := GetPixelSize(pixFormat)
+	pixSize := GetPixelSize(pp.PixFormat)
 	rowCount := 0
 	rowSize := 0
-	for pos := 0; pos < len(data); {
-		pixCount := data[pos]
+	for pos := 0; pos < len(pp.Data); {
+		pixCount := pp.Data[pos]
 		if pixCount == 0 {
 			// New row
-			if rowSize != width {
-				return nil, errors.New("Invalid data")
+			if rowSize != pp.Width {
+				return errors.New("Invalid data")
 			}
 
 			rowCount++
@@ -170,16 +173,70 @@ func LoadPackedPixmap(fileName string) (*PackedPixmap, error) {
 		pos += 1 + pixSize
 	}
 
-	if rowCount != height {
-		return nil, errors.New("Invalid data")
+	if rowCount != pp.Height {
+		return errors.New("Invalid data")
 	}
-	packedPixmap := &PackedPixmap{
-		Data:      data,
-		Width:     width,
-		Height:    height,
-		PixFormat: pixFormat,
+
+	return nil
+}
+
+// LoadPackedPixmap loads LoadPacked
+func LoadPackedPixmap(fileName string) (*PackedPixmap, error) {
+	file, err := os.Open(fileName)
+	if err != nil {
+		return nil, err
 	}
-	return packedPixmap, nil
+	defer file.Close()
+
+	pp, err := parseHeader(file)
+	if err != nil {
+		return nil, err
+	}
+
+	pp.Data, err = ioutil.ReadAll(file)
+	if err != nil {
+		return nil, err
+	}
+
+	err = pp.Check()
+	if err != nil {
+		return nil, err
+	}
+
+	return pp, nil
+}
+
+// MMapPackedPixmap maps PackedPixmap to memory
+func MMapPackedPixmap(fileName string) (*PackedPixmap, error) {
+	file, err := os.Open(fileName)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	fileInfo, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	fileSize := int(fileInfo.Size())
+
+	data, err := syscall.Mmap(int(file.Fd()), 0, fileSize, syscall.PROT_READ, syscall.MAP_PRIVATE)
+	if err != nil {
+		return nil, err
+	}
+
+	pp, err := parseHeader(bytes.NewReader(data[0:rawHeaderSize]))
+	if err != nil {
+		return nil, err
+	}
+	pp.Data = data[rawHeaderSize:]
+
+	err = pp.Check()
+	if err != nil {
+		return nil, err
+	}
+
+	return pp, nil
 }
 
 func eqPixels(a []byte, b []byte) bool {
@@ -198,7 +255,7 @@ func eqPixels(a []byte, b []byte) bool {
 
 // PackPixmap packs Pixmap
 func PackPixmap(pixmap *Pixmap) (*PackedPixmap, error) {
-	packedPixmap := &PackedPixmap{
+	pp := &PackedPixmap{
 		Width:     pixmap.Width,
 		Height:    pixmap.Height,
 		PixFormat: pixmap.PixFormat,
@@ -225,11 +282,11 @@ func PackPixmap(pixmap *Pixmap) (*PackedPixmap, error) {
 				pixOffset += pixSize
 			}
 
-			packedPixmap.Data = append(packedPixmap.Data, eqPixCount)
-			packedPixmap.Data = append(packedPixmap.Data, packedPixel...)
+			pp.Data = append(pp.Data, eqPixCount)
+			pp.Data = append(pp.Data, packedPixel...)
 		}
-		packedPixmap.Data = append(packedPixmap.Data, 0x00) // New row
+		pp.Data = append(pp.Data, 0x00) // New row
 	}
 
-	return packedPixmap, nil
+	return pp, nil
 }
