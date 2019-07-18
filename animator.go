@@ -39,10 +39,11 @@ type Animator struct {
 
 	state animationState
 
-	playedFrames    []Frame
-	currentFrameNum int
+	playedFrames []Frame
+	nextFrameNum int
+	shownFrame   *Frame
 
-	startFindTransitionFrameNum int
+	tryInitTransitionCounter int
 }
 
 // NewAnimator creats new Animator
@@ -128,6 +129,7 @@ func (animator *Animator) doDraw() {
 		if frame == nil {
 			break
 		}
+		animator.shownFrame = frame
 
 		showNextFrameTime = showNextFrameTime.Add(showFrameDuration)
 		if time.Until(showNextFrameTime) <= 0 {
@@ -161,7 +163,7 @@ func (animator *Animator) getCurremtFrame() *Frame {
 
 	if animator.state == asInitChangeAnimation {
 		animator.state = asFindTransitionFrame
-		animator.startFindTransitionFrameNum = animator.currentFrameNum
+		animator.tryInitTransitionCounter = 0
 	}
 
 	if animator.state == asFindTransitionFrame {
@@ -173,23 +175,24 @@ func (animator *Animator) getCurremtFrame() *Frame {
 }
 
 func (animator *Animator) getCurrentAnimationFrame() *Frame {
-	frame := &animator.playedFrames[animator.currentFrameNum]
-	animator.currentFrameNum = (animator.currentFrameNum + 1) % len(animator.playedFrames)
+	frame := &animator.playedFrames[animator.nextFrameNum]
+	animator.nextFrameNum = (animator.nextFrameNum + 1) % len(animator.playedFrames)
 	return frame
 }
 
 func (animator *Animator) tryInitTransitionToNextAnimation() *Frame {
-	frame := animator.getCurrentAnimationFrame()
+	animator.tryInitTransitionCounter++
 
-	if !frame.IsTransitionFrame() {
+	shownFrame := animator.shownFrame
+	if shownFrame == nil || !shownFrame.IsTransitionFrame() {
 		animator.checkFindTransitionFrameLooping()
-		return frame
+		return animator.getCurrentAnimationFrame()
 	}
 
-	transitionFrameSeriesName, ok := frame.GetSeriesForTransition(*animator.nextAnimationName)
+	transitionFrameSeriesName, ok := shownFrame.GetSeriesForTransition(*animator.nextAnimationName)
 	if !ok {
 		animator.checkFindTransitionFrameLooping()
-		return frame
+		return animator.getCurrentAnimationFrame()
 	}
 
 	var transitionFrames []Frame
@@ -199,7 +202,7 @@ func (animator *Animator) tryInitTransitionToNextAnimation() *Frame {
 		if transitionFrameSeries == nil {
 			err := fmt.Errorf("Could't find a series of frames named '%s'", transitionFrameSeriesName)
 			animator.finishChangeAnimation(err)
-			return frame
+			return animator.getCurrentAnimationFrame()
 		}
 
 		transitionFrames = transitionFrameSeries.Frames
@@ -207,16 +210,15 @@ func (animator *Animator) tryInitTransitionToNextAnimation() *Frame {
 
 	animator.state = asTransitionToNextAnimation
 	animator.playedFrames = transitionFrames
-	animator.currentFrameNum = 0
-
-	return frame
+	animator.nextFrameNum = 0
+	return animator.getCurrentTransitionFrame()
 }
 
 func (animator *Animator) getCurrentTransitionFrame() *Frame {
 
-	if animator.currentFrameNum < len(animator.playedFrames) {
-		frame := &animator.playedFrames[animator.currentFrameNum]
-		animator.currentFrameNum++
+	if animator.nextFrameNum < len(animator.playedFrames) {
+		frame := &animator.playedFrames[animator.nextFrameNum]
+		animator.nextFrameNum++
 		return frame
 	}
 
@@ -225,7 +227,7 @@ func (animator *Animator) getCurrentTransitionFrame() *Frame {
 }
 
 func (animator *Animator) checkFindTransitionFrameLooping() {
-	if animator.currentFrameNum == animator.startFindTransitionFrameNum {
+	if animator.tryInitTransitionCounter >= len(animator.playedFrames) {
 		err := fmt.Errorf("Could't find a transition frame for switch transition from '%s' to '%s'",
 			animator.animationName, *animator.nextAnimationName)
 		animator.finishChangeAnimation(err)
@@ -264,7 +266,7 @@ func (animator *Animator) setAnimation(animationName string) error {
 
 	animator.animationName = animationName
 	animator.playedFrames = frameSeries.Frames
-	animator.currentFrameNum = 0
+	animator.nextFrameNum = 0
 	animator.state = asPlayCurrentAnimation
 	return nil
 }
