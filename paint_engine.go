@@ -6,6 +6,9 @@ import (
 
 // PaintEngine is the interface definition for drawing
 type PaintEngine interface {
+	GetWidth() int
+	GetHeight() int
+
 	Begin() error
 	Clear(rect image.Rectangle) error
 	DrawPixmap(top image.Point, pixmap *Pixmap) error

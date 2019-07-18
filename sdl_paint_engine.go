@@ -35,6 +35,16 @@ func NewSDLPaintEngine(width int, height int) (PaintEngine, error) {
 	return &sdlPaintEngine{window, renderer}, nil
 }
 
+func (p *sdlPaintEngine) GetWidth() int {
+	w, _ := p.window.GetSize()
+	return int(w)
+}
+
+func (p *sdlPaintEngine) GetHeight() int {
+	_, h := p.window.GetSize()
+	return int(h)
+}
+
 func (p *sdlPaintEngine) Begin() error {
 	return nil
 }

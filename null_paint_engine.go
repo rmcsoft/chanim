@@ -12,6 +12,14 @@ func NullPaintEngine() PaintEngine {
 	return nullPaintEngine{}
 }
 
+func (nullPaintEngine) GetWidth() int {
+	return 0
+}
+
+func (nullPaintEngine) GetHeight() int {
+	return 0
+}
+
 func (nullPaintEngine) Begin() error {
 	return nil
 }

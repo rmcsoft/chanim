@@ -186,6 +186,14 @@ type kmsdrmPaintEngine struct {
 	cmds     []C.Cmd
 }
 
+func (p *kmsdrmPaintEngine) GetWidth() int {
+	return int(p.framebuffers[0].pixmap.rect.width)
+}
+
+func (p *kmsdrmPaintEngine) GetHeight() int {
+	return int(p.framebuffers[0].pixmap.rect.height)
+}
+
 func (p *kmsdrmPaintEngine) Begin() error {
 	if p.isActive {
 		return errors.New("KMSDRMPaintEngine is already active")
