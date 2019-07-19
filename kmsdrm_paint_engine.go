@@ -113,17 +113,18 @@ void drawPackedPixmapInsideFBU16(Pixmap* fb, const Pixmap* pixmap) {
 
 	int lineNum = pixmap->rect.y;
 	int outOffset = pixmap->rect.x*sizeof(uint16_t);
+	uint16_t* outPos = (uint16_t*)(fb->data + outOffset);
 	while (inPos != inEnd) {
 		int pixCount = *inPos++;
 		if (pixCount == 0) {
 			// Line finished
 			++lineNum;
+			outPos = (uint16_t*)(fb->data + lineNum*fb->bytePerLine + outOffset);
 			continue;
 		}
 
 		{
 			uint16_t pix = *((uint16_t*)inPos);
-			uint16_t* outPos = (uint16_t*)(fb->data + lineNum*fb->bytePerLine + outOffset);
 			uint16_t* outEnd = outPos + pixCount;
 			while (outPos != outEnd) {
 				*outPos++ = pix;
