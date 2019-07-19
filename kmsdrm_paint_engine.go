@@ -372,10 +372,6 @@ func (p *kmsdrmPaintEngine) End() error {
 	err := mode.SetCrtc(p.card, p.modeset.Crtc, frontFrameBuffer.id,
 		0, 0, &p.modeset.Conn, 1, &p.modeset.Mode)
 
-	if err != nil {
-		fmt.Printf("SetCrtc error=%v\n", err)
-	}
-
 	p.cmds = p.cmds[:0]
 	p.isActive = false
 	p.frontFrameBufferNum = (p.frontFrameBufferNum + 1) % len(p.framebuffers)

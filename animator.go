@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/sirupsen/logrus"
 )
 
 type animationState int
@@ -135,7 +137,7 @@ func (animator *Animator) doDraw() {
 		if time.Until(showNextFrameTime) <= 0 {
 			droppedFrameCount++
 			if droppedFrameCount%100 == 0 {
-				fmt.Printf("Animator: the number of dropped frames: %v\n", droppedFrameCount)
+				logrus.Warnf("Animator: the number of dropped frames: %v\n", droppedFrameCount)
 			}
 			continue
 		}
