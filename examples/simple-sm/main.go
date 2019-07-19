@@ -17,7 +17,7 @@ const (
 	dy              = 5
 )
 
-func makeWhiteSquare() *chanim.Pixmap {
+func makeWhiteSquare() *chanim.PackedPixmap {
 	bytePerLine := whiteSquareSize * chanim.GetPixelSize(pixFormat)
 	pixels := make([]byte, whiteSquareSize*bytePerLine)
 
@@ -25,13 +25,15 @@ func makeWhiteSquare() *chanim.Pixmap {
 		pixels[i] = 0xFF
 	}
 
-	return &chanim.Pixmap{
+	pixmap := &chanim.Pixmap{
 		Data:        pixels,
 		Width:       whiteSquareSize,
 		Height:      whiteSquareSize,
 		PixFormat:   pixFormat,
 		BytePerLine: bytePerLine,
 	}
+	ppixmap, _ := chanim.PackPixmap(pixmap)
+	return ppixmap
 }
 
 var whiteSquare = makeWhiteSquare()
@@ -59,7 +61,7 @@ func makeVFrames(start int, end int) []chanim.Frame {
 			chanim.Frame{
 				DrawOperations: []chanim.DrawOperation{
 					chanim.NewClearDrawOperation(image.Rect(0, 0, 2*width, 2*height)),
-					chanim.NewDrawPixmapOperation(top, whiteSquare),
+					chanim.NewDrawPackedPixmapOperation(top, whiteSquare),
 				},
 			},
 		)
@@ -97,7 +99,7 @@ func makeHFrames(start int, end int) []chanim.Frame {
 			chanim.Frame{
 				DrawOperations: []chanim.DrawOperation{
 					chanim.NewClearDrawOperation(image.Rect(0, 0, 2*width, 2*height)),
-					chanim.NewDrawPixmapOperation(top, whiteSquare),
+					chanim.NewDrawPackedPixmapOperation(top, whiteSquare),
 				},
 			},
 		)

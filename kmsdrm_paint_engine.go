@@ -64,6 +64,19 @@ Rect intersect(const Rect* r1, const Rect* r2) {
 	return ret;
 }
 
+static inline
+bool isRectNull(const Rect* r) {
+	return r->width == 0 && r->height == 0;
+}
+
+static inline
+bool eqRect(const Rect* r1, const Rect* r2) {
+	return r1->x == r2->x &&
+		r1->y == r2->y &&
+		r1->width == r2->width &&
+		r1->height == r2->width;
+}
+
 static
 void clearRect(Pixmap* fb, int pixSize, const Rect* rect) {
 	Rect r = intersect(&fb->rect, rect);
@@ -94,23 +107,23 @@ void drawPixmap(Pixmap* fb, int pixSize, const Pixmap* pixmap) {
 }
 
 static
-void drawPackedPixmapU16(Pixmap* fb, const Pixmap* pixmap) {
+void drawPackedPixmapInsideFBU16(Pixmap* fb, const Pixmap* pixmap) {
 	uint8_t* inPos = (uint8_t*)pixmap->data;
 	uint8_t* inEnd = inPos + pixmap->dataSize;
 
-	int lineNum = 0;
-	uint16_t* outPos = (uint16_t*)fb->data;
+	int lineNum = pixmap->rect.y;
+	int outOffset = pixmap->rect.x*sizeof(uint16_t);
 	while (inPos != inEnd) {
 		int pixCount = *inPos++;
 		if (pixCount == 0) {
 			// Line finished
 			++lineNum;
-			outPos = (uint16_t*)(fb->data + lineNum*fb->bytePerLine);
 			continue;
 		}
 
 		{
 			uint16_t pix = *((uint16_t*)inPos);
+			uint16_t* outPos = (uint16_t*)(fb->data + lineNum*fb->bytePerLine + outOffset);
 			uint16_t* outEnd = outPos + pixCount;
 			while (outPos != outEnd) {
 				*outPos++ = pix;
@@ -121,11 +134,92 @@ void drawPackedPixmapU16(Pixmap* fb, const Pixmap* pixmap) {
 }
 
 static
-void drawPackedPixmap(Pixmap* fb, int pixSize, const Pixmap* pixmap) {
-	if (pixSize == 2)
-		drawPackedPixmapU16(fb, pixmap);
+void drawPackedPixmapNotInsideFBU16(Pixmap* fb, const Pixmap* pixmap) {
+	int fbW = fb->rect.width;
+	int fbH = fb->rect.height;
+	uint8_t* inPos = (uint8_t*)pixmap->data;
+	uint8_t* inEnd = inPos + pixmap->dataSize;
+
+	// Part of the pixmap above the screen, skip it.
+	int lineNum = pixmap->rect.y;
+	while (lineNum < 0) {
+		while (*inPos++ != 0) {
+			inPos += sizeof(uint16_t);
+		}
+		++lineNum;
+	}
+
+	do {
+		int x = pixmap->rect.x;
+
+		int pixCount = *inPos++;
+		uint16_t pix = *((uint16_t*)inPos);
+		inPos += sizeof(uint16_t);
+		if (x < 0) {
+			// Part of pixmap to the left of the screen, skip it.
+			for (;;) {
+				int d = min(-x, pixCount);
+				x += d;
+				pixCount -= d;
+				//printf("X=%d\n", x);
+				if (x < 0) {
+					pixCount = *inPos++;
+					pix = *((uint16_t*)inPos);
+					inPos += sizeof(uint16_t);
+					continue;
+				}
+				break;
+			}
+		}
+
+		{
+			uint16_t* outPos = (uint16_t*)(fb->data + lineNum*fb->bytePerLine + x*sizeof(uint16_t));
+			uint16_t* outEnd = (uint16_t*)(fb->data + lineNum*fb->bytePerLine + fbW*sizeof(uint16_t));
+			for (;;) {
+				pixCount = min(pixCount, outEnd - outPos);
+				for (;pixCount > 0; --pixCount) {
+					*outPos++ = pix;
+				}
+
+				if (outPos == outEnd) {
+					// Skipping the rest of the line in pixmap
+					while (*inPos++ != 0) {
+						inPos += sizeof(uint16_t);
+					}
+					break;
+				}
+
+				pixCount = *inPos++;
+				if (pixCount == 0) {
+					break;
+				}
+
+				pix = *((uint16_t*)inPos);
+				inPos += sizeof(uint16_t);
+			}
+		}
+
+		++lineNum;
+	} while (inPos != inEnd && lineNum < fbH);
 }
 
+static
+void drawPackedPixmap(Pixmap* fb, int pixSize, const Pixmap* pixmap) {
+	Rect intersectRect = intersect(&fb->rect, &pixmap->rect);
+	if (isRectNull(&intersectRect)) {
+		return;
+	}
+
+	if (eqRect(&intersectRect, &pixmap->rect)) {
+		if (pixSize == 2)
+			drawPackedPixmapInsideFBU16(fb, pixmap);
+	} else {
+		if (pixSize == 2)
+			drawPackedPixmapNotInsideFBU16(fb, pixmap);
+	}
+}
+
+static
 void playCmds(Pixmap* fb, int pixSize, Cmd* cmds, int cmdCount) {
 	int i;
 
@@ -248,16 +342,6 @@ func (p *kmsdrmPaintEngine) DrawPackedPixmap(top image.Point, pixmap *PackedPixm
 
 	if p.pixFormat != pixmap.PixFormat {
 		return errors.New("PackedPixmap has invalid pixel format")
-	}
-
-	if !top.Eq(image.ZP) {
-		return errors.New("PackedPixmap can be drawn so far only in (0,0) coordinate")
-	}
-
-	screenWidth := int(p.framebuffers[0].pixmap.rect.width)
-	screenHeight := int(p.framebuffers[0].pixmap.rect.height)
-	if pixmap.Width > screenWidth || pixmap.Height > screenHeight {
-		return errors.New("PackedPixmap size must not exceed screen size")
 	}
 
 	rect := image.Rect(top.X, top.Y, top.X+pixmap.Width, top.Y+pixmap.Height)
